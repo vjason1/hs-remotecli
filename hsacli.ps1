@@ -6,18 +6,29 @@
 #  -----------------------------------------------------------------
 #
 #  hsacli.ps1 - Hammerspace CLI Remote Wrapper for Windows PowerShell
-#  Authors : Jason Ventresco, Shawn Dutton
+#  Authors: Jason Ventresco, Shawn Dutton
+#
+#  VERSION HISTORY:
+#    v1.0.0  Full-featured initial release with complete parity to hsacli.sh
+#            v1.5.0. hsa> mode, -print, -recursive, -export-txt, -export-csv,
+#            full line editor, credential rollback, PSParser tokenizer.
+#
+#    v1.1.0  Removed 'hsa <command>' prefix usage. Dot-sourcing the script now
+#            launches hsa> mode directly. All Hammerspace commands are entered
+#            at the hsa> prompt without a prefix. Added Shawn Dutton as
+#            co-author.
 #
 #  Load:
 #    . .\hsacli.ps1
+#    Launches hsa> mode immediately. Type commands directly — no prefix needed.
 #
-#  Run:
-#    hsa share-list
-#    hsa
+#  Usage (at hsa> prompt):
+#    hsa> share-list
 #    hsa> share-list -print name
 #    hsa> share-list -print name -recursive share-snapshot-create --share-name '$#' --now
 #    hsa> share-list -export-txt shares.txt
 #    hsa> share-list -export-csv shares.csv
+#    hsa> exit
 #
 #  Dependency:
 #    plink.exe from PuTTY must be installed and available on PATH.
@@ -846,22 +857,10 @@ function Start-HsaMode {
 }
 
 function hsa {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-
     if (-not (Ensure-HsaCredentials)) {
         return
     }
-
-    if (-not $Args -or $Args.Count -eq 0) {
-        Start-HsaMode
-        return
-    }
-
-    try {
-        Invoke-HsaRunCommand $Args | ForEach-Object { Write-Output $_ }
-    } catch {
-        Write-HsaWarn $_.Exception.Message
-    }
+    Start-HsaMode
 }
 
 function hsa-help {
@@ -870,33 +869,49 @@ function hsa-help {
   Hammerspace CLI Wrapper for Windows PowerShell
   ------------------------------------------------
 
-  COMMANDS:
-    hsa <command> [args]    Run any HS CLI command on the cluster
-    hsa                     Enter hsa> mode; HS commands no longer need prefix
-    hsa-session             Open the raw remote Hammerspace CLI session
-    hsa-status              Show connection info and test reachability
-    hsa-logout              Clear cached credentials
-    hsa-help                Show this help
+  GETTING STARTED:
+    . .\hsacli.ps1    Load the wrapper and enter hsa> mode
+    hsa               Re-enter hsa> mode after exiting
 
-  HSA MODE:
-    hsa> share-list
-    hsa> share-list -print name
-    hsa> share-list -export-csv shares.csv
-    hsa> quit
+  hsa> BUILT-INS (handled locally, not sent to the cluster):
+    exit / quit    Leave hsa> mode
+    help / ?       Show this help
+    status         Show connection info and test reachability
+    login          Re-prompt for credentials
+    logout         Clear cached credentials
+    session        Open the raw SSH Hammerspace CLI session
+
+  TAB COMPLETION:
+    Tab completes command names, wrapper options, -print field names,
+    recursive child commands, and local filenames:
+      hsa> sh<Tab>                      completes toward share-* commands
+      hsa> share-list -p<Tab>           completes -print, -recursive, etc.
+      hsa> share-list -print n<Tab>     completes field names
+      hsa> share-list -export-txt <Tab> completes local filenames
 
   PRINT AND RECURSIVE:
-    hsa share-list -print name
-    hsa share-list -print name -recursive share-snapshot-create --share-name '$#' --now
+    hsa> share-list -print name
+    hsa> share-list -print name -recursive share-snapshot-create --share-name '$#' --now
 
   EXPORT:
-    hsa share-list -export-txt shares.txt
-    hsa share-list -export-csv shares.csv
-    hsa share-list -print name -export-txt share_names.txt
+    hsa> share-list -export-txt shares.txt
+    hsa> share-list -export-csv shares.csv
+    hsa> share-list -print name -export-txt share_names.txt
+
+  EXAMPLES:
+    hsa> share-list
+    hsa> share-list --full
+    hsa> node-list
+    hsa> share-list -print name
+    hsa> share-list -export-csv shares.csv
+    hsa> system-view
+    hsa> share-create --name myshare --path /shares/myshare
+    hsa> share-snapshot-create --share-name myshare --now
 
   NOTES:
     - plink.exe from PuTTY must be installed and on PATH.
     - Credentials are cached in this PowerShell session only.
-    - hsa> mode sends non-built-in commands remotely to the cluster.
+    - To switch clusters: run 'logout', then 'login' at the hsa> prompt.
 
 '@
 }
@@ -945,11 +960,9 @@ function Register-HsaCompletion {
 
 Register-HsaCompletion
 
-if ($MyInvocation.InvocationName -ne '.') {
-    Start-HsaMode
-} else {
-    Write-Host "[hsa] Hammerspace CLI wrapper loaded." -ForegroundColor Cyan
-    Write-Host "     Commands: hsa-login  hsa-logout  hsa <cmd>  hsa-session  hsa-status  hsa-help" -ForegroundColor DarkGray
-    Write-Host "     Tab-completion enabled: hsa <Tab> to see commands and options." -ForegroundColor DarkGray
-    Write-Host "     Credentials will be prompted on first use." -ForegroundColor DarkGray
-}
+# Both dot-sourcing and direct execution launch hsa> mode immediately.
+Write-Host "[hsa] Hammerspace CLI wrapper loaded." -ForegroundColor Cyan
+Write-Host "     Type commands directly at hsa> — no prefix needed." -ForegroundColor DarkGray
+Write-Host "     Built-ins: login  logout  status  session  help  exit" -ForegroundColor DarkGray
+Write-Host "     Credentials will be prompted on first use." -ForegroundColor DarkGray
+Start-HsaMode

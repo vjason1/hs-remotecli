@@ -23,7 +23,7 @@
 #
 # ==============================================================================
 #  hsacli.sh — Hammerspace CLI Remote Wrapper
-#  Authors : Jason Ventresco, Shawn Dutton
+#  Authors: Jason Ventresco, Shawn Dutton
 #
 #  VERSION HISTORY:
 #    v1.0.0  Initial release. Core hsa() wrapper, credential caching via
@@ -47,51 +47,49 @@
 #    v1.5.0  Added local hsa> mode, readline command completion inside that
 #            mode, and wrapper-side -print / -recursive command chaining.
 #
+#    v1.6.0  Removed 'hsa <command>' prefix usage. Sourcing the script now
+#            launches hsa> mode directly. All Hammerspace commands are entered
+#            at the hsa> prompt without a prefix. Added Shawn Dutton as
+#            co-author.
+#
 # ==============================================================================
 #
 #  USAGE — two ways to load this tool:
 #
 #    1) Source into your current shell (recommended):
 #         source /path/to/hsacli.sh
-#       This adds the 'hsa' function and helpers directly to your shell session.
-#       Credentials are cached in your shell environment for the session.
-#       All standard bash features (for loops, pipes, variables, etc.) work
-#       normally alongside hsa commands.
+#       Launches hsa> mode immediately. Type Hammerspace commands directly at
+#       the hsa> prompt — no prefix needed. Credentials are prompted on first
+#       use and cached for the session.
 #
-#    2) Run as a standalone hsa> session:
+#    2) Run directly:
 #         bash /path/to/hsacli.sh
-#       Drops you into the hsa> prompt where Hammerspace commands run remotely
-#       without the hsa prefix. Type 'exit' or Ctrl-D to quit.
+#       Also drops you into hsa> mode.
 #
-#  SEPARATING LINUX COMMANDS FROM HSA COMMANDS:
+#  USING hsa> MODE:
 #
-#    In your normal shell, Hammerspace CLI commands are prefixed with 'hsa'.
-#    Everything without the prefix runs locally in bash as normal. Run 'hsa'
-#    by itself to enter hsa> mode, where the prefix is implied.
+#    At the hsa> prompt, type any Hammerspace CLI command without a prefix:
 #
-#    Examples:
-#      hsa share-list                               # HS command (runs on cluster)
-#      ls /mnt/shares                              # Linux command (runs locally)
+#      hsa> share-list
+#      hsa> share-list --full
+#      hsa> node-list
+#      hsa> share-list -print name
+#      hsa> share-list -print name -recursive share-snapshot-create --share-name '$#' --now
+#      hsa> share-list -export-csv shares.csv
 #
-#    In for loops, the distinction is explicit and readable:
-#
-#      for share in $(hsa share-list --name "*"); do
-#          echo "Processing: $share"               # runs locally
-#          hsa share-snapshot-create \              # runs on cluster
-#              --share-name "$share" --now
-#      done
+#    Built-in keywords (handled locally, not sent to the cluster):
+#      exit / quit    Leave hsa> mode
+#      help / ?       Show the quick-reference help
+#      status         Show connection info and test reachability
+#      login          Re-prompt for credentials
+#      logout         Clear cached credentials
+#      session        Open the raw SSH Hammerspace CLI session
 #
 #  AVAILABLE FUNCTIONS (after sourcing):
 #
-#    hsa <command> [args ...]
-#      Run any Hammerspace CLI command on the connected cluster.
-#      Output is returned to stdout so it works with pipes and $().
-#      With no arguments, opens local hsa> mode where the hsa prefix is implied.
-#
-#    hsa <parent-command> -print <field> -recursive <child-command with '$#'>
-#      Extract one field from record-style output, then run the child command
-#      once per extracted value, replacing '$#' with that value. Quote '$#' in
-#      your local shell so bash does not expand it.
+#    hsa
+#      Enter hsa> mode. All Hammerspace CLI commands are typed directly at the
+#      hsa> prompt without any prefix.
 #
 #    hsa-session
 #      Open a full interactive Hammerspace CLI session (SSH).
@@ -704,50 +702,32 @@ _hsa_run_command() {
 }
 
 # ==============================================================================
-#  hsa — Run a Hammerspace CLI command on the cluster
+#  hsa — Enter hsa> mode
 # ==============================================================================
 #
 #  WHAT THIS DOES:
-#    The primary command. Takes any Hammerspace CLI command and its arguments,
-#    SSHes to the cluster, executes the command in the HS restricted shell, and
-#    returns the output to local stdout.
-#
-#    Because output goes to stdout, 'hsa' commands work naturally with:
-#      - Command substitution:  name=$(hsa share-list --name myshare | grep Name)
-#      - Pipes:                 hsa share-list | grep active
-#      - For loops:             for x in $(hsa node-list -print name); do ...
-#      - Redirection:           hsa share-list --full > /tmp/shares.txt
-#
-#    With no arguments, opens local hsa> mode. Use hsa-session for the raw SSH
-#    Hammerspace CLI session.
+#    Enters hsa> mode, where Hammerspace CLI commands are typed directly at the
+#    prompt without any prefix. All commands are sent to the connected cluster.
+#    Wrapper features (-print, -recursive, -export-txt, -export-csv) and
+#    tab-completion are available at the hsa> prompt.
 #
 #  USAGE:
-#    hsa <command> [arguments ...]
-#    hsa <parent-command> -print <field> -recursive <child-command with '$#'>
-#    hsa <command> -export-txt <local-file>
-#    hsa <command> -export-csv <local-file>
+#    hsa
 #
-#  EXAMPLES:
-#    hsa share-list
-#    hsa share-list --full
-#    hsa node-list
-#    hsa share-list -print name
-#    hsa share-list -export-txt shares.txt
-#    hsa share-list -export-csv shares.csv
-#    hsa share-list -print name -recursive share-snapshot-create --share-name '$#' --now
-#    hsa system-view
-#    hsa                        # opens local hsa> mode
+#  EXAMPLES (at the hsa> prompt):
+#    hsa> share-list
+#    hsa> share-list --full
+#    hsa> node-list
+#    hsa> share-list -print name
+#    hsa> share-list -export-txt shares.txt
+#    hsa> share-list -export-csv shares.csv
+#    hsa> share-list -print name -recursive share-snapshot-create --share-name '$#' --now
+#    hsa> system-view
+#    hsa> exit
 # ==============================================================================
 hsa() {
     _hsa_require_credentials || return 1
-
-    # No arguments = open local HSA mode where the hsa prefix is implied.
-    if [[ $# -eq 0 ]]; then
-        _hsa_mode
-        return $?
-    fi
-
-    _hsa_run_command "$@"
+    _hsa_mode
 }
 
 
@@ -906,92 +886,59 @@ hsa-help() {
   Hammerspace CLI Wrapper — Quick Reference
   ─────────────────────────────────────────
 
-  COMMANDS:
-    hsa <command> [args]    Run any HS CLI command on the cluster
-    hsa                     Enter hsa> mode; HS commands no longer need prefix
-    hsa-session             Open the raw SSH Hammerspace CLI session
-    hsa-status              Show connection info and test reachability
-    hsa-logout              Clear cached credentials
-    hsa-help                Show this help
+  GETTING STARTED:
+    source /path/to/hsacli.sh   Load the wrapper and enter hsa> mode
+    hsa                         Re-enter hsa> mode after exiting
 
-  HSA MODE:
-    Run 'hsa' by itself to enter hsa> mode.
-    In that mode, type Hammerspace commands directly:
-      hsa> share-list
-      hsa> share-list -print name
+  hsa> BUILT-INS (handled locally, not sent to the cluster):
+    exit / quit    Leave hsa> mode
+    help / ?       Show this help
+    status         Show connection info and test reachability
+    login          Re-prompt for credentials
+    logout         Clear cached credentials
+    session        Open the raw SSH Hammerspace CLI session
 
   TAB COMPLETION:
-    After sourcing, tab-completion is active for all HS commands:
-      hsa sh<Tab>           → completes to share-* commands
-      hsa <Tab><Tab>        → lists all available commands
-    In hsa> mode, Tab completes command names, wrapper options, recursive
-    child commands, common -print field names, and local export filenames:
-      hsa> sh<Tab>          → completes toward share-* commands
-      hsa> share-list -p<Tab>
-      hsa> share-list -print n<Tab>
-      hsa> share-list -export-txt sh<Tab>
+    Tab completes command names, wrapper options, -print field names,
+    recursive child commands, and local export filenames:
+      hsa> sh<Tab>                    → completes toward share-* commands
+      hsa> share-list -p<Tab>         → completes -print, -recursive, etc.
+      hsa> share-list -print n<Tab>   → completes field names
+      hsa> share-list -export-txt <Tab> → completes local filenames
 
   PRINT AND RECURSIVE:
-    -print <field> prints values from record-style fields like "Name: root".
-    Field matching ignores case, spaces, hyphens, and underscores, so
-    "internal-id" matches "Internal ID:".
-    Numeric selectors still work for simple whitespace-delimited command output.
-    -recursive runs another command once per printed value. Use '$#' in the
-    child command where the parent value should be inserted. Quote '$#' in
-    your shell so bash does not expand it.
+    -print <field>   Extract values from record-style output like "Name: root".
+                     Field matching ignores case, spaces, hyphens, underscores.
+                     Numeric selectors work for whitespace-delimited output.
+    -recursive       Run a child command once per extracted value.
+                     Use '$#' as the placeholder. Quote it to prevent expansion.
 
-      hsa share-list -print name
-      hsa share-list -print name -recursive share-snapshot-create --share-name '$#' --now
+      hsa> share-list -print name
+      hsa> share-list -print name -recursive share-snapshot-create --share-name '$#' --now
 
   EXPORT:
-    -export-txt <file> writes the exact displayed output to a local text file.
-    -export-csv <file> converts record-style "Field: value" output to CSV.
+    -export-txt <file>   Write exact output to a local text file.
+    -export-csv <file>   Convert "Field: value" output to a local CSV file.
 
-      hsa share-list -export-txt shares.txt
-      hsa share-list -export-csv shares.csv
-      hsa share-list -print name -export-txt share_names.txt
+      hsa> share-list -export-txt shares.txt
+      hsa> share-list -export-csv shares.csv
+      hsa> share-list -print name -export-txt share_names.txt
 
-  SEPARATING HS COMMANDS FROM LINUX COMMANDS:
-    The 'hsa' prefix routes the command to the cluster.
-    Everything without 'hsa' runs locally in bash.
-
-  EXAMPLES — single commands:
-    hsa share-list
-    hsa share-list --full
-    hsa node-list
-    hsa share-list -print name
-    hsa share-list -export-txt shares.txt
-    hsa share-list -export-csv shares.csv
-    hsa system-view
-    hsa share-create --name myshare --path /shares/myshare
-    hsa share-snapshot-create --share-name myshare --now
-
-  EXAMPLES — for loops mixing local and HS commands:
-
-    # Snapshot every share whose name starts with "prod-"
-    for share in $(hsa share-list | awk '/^prod-/{print $1}'); do
-        echo "Snapshotting: $share"          # local bash
-        hsa share-snapshot-create \           # HS CLI command
-            --share-name "$share" \
-            --now \
-            --snapshot-name "manual-$(date +%Y%m%d)"
-    done
-
-    # List shares and write a local report
-    hsa share-list --full > /home/serviceadmin/share_report.txt
-    echo "Report saved."
-
-    # Check node status, filter locally, act on results
-    while IFS= read -r node; do
-        echo "--- $node ---"
-        hsa node-list --name "$node"
-    done < /home/serviceadmin/node_list.txt
+  EXAMPLES:
+    hsa> share-list
+    hsa> share-list --full
+    hsa> node-list
+    hsa> share-list -print name
+    hsa> share-list -export-csv shares.csv
+    hsa> system-view
+    hsa> share-create --name myshare --path /shares/myshare
+    hsa> share-snapshot-create --share-name myshare --now
 
   NOTES:
     - Credentials are cached in shell env vars (HSA_IP, HSA_USER, HSA_PASS)
       for this session only. Never written to disk.
     - 'sshpass' must be installed: apt install sshpass
-    - To switch clusters: hsa-logout, then run any 'hsa' command to re-prompt.
+    - To switch clusters: run 'logout', then 'login' at the hsa> prompt.
 
 HELP
 }
@@ -1549,7 +1496,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     # ── Running directly — start hsa> mode ────────────────────────────────────
     _hsa_repl
 else
-    # ── Being sourced — register functions and tab completion ──────────────────
+    # ── Being sourced — register tab completion then launch hsa> mode ─────────
     if [[ -n "${BASH_VERSION:-}" ]]; then
         # Bash: register the completion handler directly
         complete -F _hsa_completions hsa
@@ -1564,7 +1511,10 @@ else
     fi
 
     echo -e "${_HS_CYN}[hsa]${_HS_RST} Hammerspace CLI wrapper loaded."
-    echo -e "${_HS_DIM}     Commands: hsa-login  hsa-logout  hsa <cmd>  hsa-session  hsa-status  hsa-help${_HS_RST}"
-    echo -e "${_HS_DIM}     Tab-completion enabled: hsa <Tab> to see all commands.${_HS_RST}"
+    echo -e "${_HS_DIM}     Type 'hsa' to enter hsa> mode. Type commands directly — no prefix needed.${_HS_RST}"
+    echo -e "${_HS_DIM}     Built-ins: login  logout  status  session  help  exit${_HS_RST}"
     echo -e "${_HS_DIM}     Credentials will be prompted on first use.${_HS_RST}"
+
+    # Launch hsa> mode immediately on source.
+    hsa
 fi
