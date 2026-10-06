@@ -1,4 +1,4 @@
-# Hammerspace Cluster Remote Admin CLI Console
+# Hammerspace Remote Admin CLI Console
 
 A CLI wrapper that lets you run Hammerspace admin commands from your local machine over SSH — with full shell integration, tab completion, field extraction, and CSV export. No need to use `serviceadmin` or log into the cluster interactively for every command.
 
