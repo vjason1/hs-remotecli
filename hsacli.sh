@@ -23,7 +23,7 @@
 #
 # ==============================================================================
 #  hsacli.sh — Hammerspace CLI Remote Wrapper
-#  Author : Jason Ventresco
+#  Authors : Jason Ventresco, Shawn Dutton
 #
 #  VERSION HISTORY:
 #    v1.0.0  Initial release. Core hsa() wrapper, credential caching via

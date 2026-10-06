@@ -6,6 +6,7 @@
 #  -----------------------------------------------------------------
 #
 #  hsacli.ps1 - Hammerspace CLI Remote Wrapper for Windows PowerShell
+#  Authors : Jason Ventresco, Shawn Dutton
 #
 #  Load:
 #    . .\hsacli.ps1
